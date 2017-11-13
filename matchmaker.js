@@ -4,16 +4,18 @@ var requiredCount = 2;
 exports.findMatch = function(client) {
     playersQueue.push(client);
 
-    while(playersQueue.length > requiredCount) {
+    while(playersQueue.length >= requiredCount) {
         var matchedPlayers = [];
         for(var i = 0; i < requiredCount; i++) {
             matchedPlayers.push(playersQueue[0]);
             playersQueue.pop();
         }
-        console.log("Matched!");
+
+        console.log('Matched!');
+        var result = { players: matchedPlayers };
 
         matchedPlayers.forEach(function(p) {
-            p.write('Matched\r\n');
+            p.sendCmd(5, result);
         });
     }
 
@@ -22,6 +24,9 @@ exports.findMatch = function(client) {
 }
 
 exports.cancel = function(client) {
-    playersQueue.slice(playersQueue.indexOf(client), 1);
+    var playerIdx = playersQueue.indexOf(client);
+    if(playerIdx == -1)
+        return;
+    playersQueue.slice(playerIdx, 1);
     console.log(client.name + ': cancel finding a match...');
 }
