@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "Simple matchmaking server",
   "main": "server.js",
-  "dependencies": {},
+  "dependencies": {
+    "playfab-sdk": "^1.16.171106"
+  },
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
