@@ -18,7 +18,7 @@ net.createServer(function (socket) {
   
   // Handle incoming messages from clients.
   socket.on('data', function (data) {
-    messageHandler.parseRawData(data);
+    messageHandler.parseRawData(data, socket);
   });
 
   // Remove the client from the list when it leaves
