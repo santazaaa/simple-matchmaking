@@ -1,32 +1,77 @@
+var async = require('async');
+var PlayFabMatchmaker = require("playfab-sdk/Scripts/PlayFab/PlayFabMatchmaker");
+var UserManager = require("./UserManager");
 var playersQueue = [];
 var requiredCount = 2;
+var matches = [];
 
-exports.findMatch = function(client) {
-    playersQueue.push(client);
-
-    while(playersQueue.length >= requiredCount) {
-        var matchedPlayers = [];
-        for(var i = 0; i < requiredCount; i++) {
-            matchedPlayers.push(playersQueue[0]);
-            playersQueue.pop();
-        }
-
-        console.log('Matched!');
-        var result = { players: matchedPlayers };
-
-        matchedPlayers.forEach(function(p) {
-            p.sendCmd(5, result);
-        });
+var authUser = function(user, callback) {
+    if(user.auth) {
+        console.log('Player already authenticated');
+        callback(null, true);
+        return;
     }
 
-    console.log(client.name + ': finding a match...');
-    console.log('count = ' + playersQueue.length);
+    console.log("auth player: " + user.playFabId);
+
+    PlayFabMatchmaker.AuthUser({
+        AuthorizationTicket: user.sessionTicket
+    }, function(error, result) {
+        if(error != null) {
+            console.log('PlayFabMatchmaker.AuthUser error: ' + error);
+            callback(error, false);
+            return;
+        }
+
+        user.auth = true;
+        console.log('auth: true');
+        callback(null, true);
+    });
+}
+
+exports.findMatch = function(user) {
+
+    async.waterfall([
+        function(next) {
+            authUser(user, next);
+        },
+        function(auth, callback) {
+            playersQueue.push(user);
+            
+            console.log(user.playFabId + ': finding a match... player in queue = ' + playersQueue.length);
+            
+            while(playersQueue.length >= requiredCount) {
+                var matchedPlayers = [];
+                for(var i = 0; i < requiredCount; i++) {
+                    matchedPlayers.push(playersQueue[0]);
+                    playersQueue.pop();
+                }
+        
+                console.log('Matched!');
+                var result = { players: matchedPlayers };
+        
+                matchedPlayers.forEach(function(p) {
+                    UserManager.getUserSocket(p.id).sendCmd(3, result); // Match found
+                });
+            }
+
+            callback(null);
+        }
+    ], function(error) {
+        if(error)
+            console.log('[matchmaker::findMatch] ' + error);
+    });
+    
 }
 
 exports.cancel = function(client) {
-    var playerIdx = playersQueue.indexOf(client);
-    if(playerIdx == -1)
-        return;
-    playersQueue.slice(playerIdx, 1);
+
+    while(true) {
+        var playerIdx = playersQueue.indexOf(client);
+        if(playerIdx == -1)
+            break;
+        playersQueue.slice(playerIdx, 1);
+    }
+    
     console.log(client.name + ': cancel finding a match...');
 }

@@ -19,3 +19,7 @@ exports.getUser = function(id) {
     console.log('[UserManager::getUser] ' + id);
     return userMap[id];
 }
+
+exports.getUserSocket = function(id) {
+    return userSocketMap[id];
+}

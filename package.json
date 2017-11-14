@@ -4,6 +4,8 @@
   "description": "Simple matchmaking server",
   "main": "server.js",
   "dependencies": {
+    "async": "^2.6.0",
+    "dotenv": "^4.0.0",
     "playfab-sdk": "^1.16.171106"
   },
   "devDependencies": {},

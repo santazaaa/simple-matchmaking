@@ -1,15 +1,18 @@
 'use strict';
 
-// Load the TCP Library
-var net = require('net');
-var messageHandler = require('./messageHandler');
+require('dotenv').config();
 
 // PlayFab setup
 var PlayFab = require("playfab-sdk/Scripts/PlayFab/PlayFab");
 var PlayFabServer = require("playfab-sdk/Scripts/PlayFab/PlayFabServer");
-PlayFab.settings.titleId = process.env.PLAYFAB_API_TITLE;
+var PlayFabMatchmaker = require("playfab-sdk/Scripts/PlayFab/PlayFabMatchmaker");
+PlayFab.settings.titleId = process.env.PLAYFAB_API_TITLE_ID;
 PlayFab.settings.developerSecretKey = process.env.PLAYFAB_SECRET_KEY;
 console.log("PlayFab settings: " + JSON.stringify(PlayFab.settings));
+
+// Load the TCP Library
+var net = require('net');
+var messageHandler = require('./messageHandler');
 
 // Start a TCP Server
 net.createServer(function (socket) {

@@ -35,6 +35,10 @@ exports.parseRawData = function(data, client) {
             case 0: // Set Playfab ID
                 setPlayFabIdToUser(payload, client);
             break;
+
+            case 1: // Find normal match
+                findNormalMatch(payload, client);
+            break;
         }
     } catch (e){
         console.error('[messageHandler::parseRawData] Failed to parse data = ' + data);
@@ -45,7 +49,13 @@ exports.parseRawData = function(data, client) {
 var setPlayFabIdToUser = function(payload, client) {
     var user = UserManager.getUser(client.name);
     user.playFabId = payload.playFabId;
+    user.sessionTicket = payload.sessionTicket;
     console.log('Set PlayFab id to user: ' + JSON.stringify(user));
+}
+
+var findNormalMatch = function(payload, client) {
+    var client = UserManager.getUser(client.name);
+    matchmaker.findMatch(client);
 }
 
 exports.onDisconnected = function(client) {
