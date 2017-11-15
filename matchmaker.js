@@ -40,26 +40,48 @@ exports.findMatch = function(user) {
             
             console.log(user.playFabId + ': finding a match... player in queue = ' + playersQueue.length);
             
+            if(playersQueue.length < requiredCount) {
+                console.log('Waiting for other players..');
+                callback('Waiting for players');
+                return;
+            }
+
+            var matchedPlayers = [];
             while(playersQueue.length >= requiredCount) {
-                var matchedPlayers = [];
+                
                 for(var i = 0; i < requiredCount; i++) {
                     matchedPlayers.push(playersQueue[0]);
                     playersQueue.pop();
                 }
         
                 console.log('Matched!');
-                var result = { players: matchedPlayers };
-        
-                matchedPlayers.forEach(function(p) {
-                    UserManager.getUserSocket(p.id).sendCmd(3, result); // Match found
-                });
+                break;
             }
 
+            callback(null, matchedPlayers);
+        },
+        function(players, callback) {
+            console.log('Starting game...');
+            PlayFabMatchmaker.StartGame({
+                Build: "1.0",
+                ExternalMatchmakerEventEndpoint: "localhost/test",
+                GameMode: "Test",
+                Region: "Singapore"
+            }, function(error, result) {
+                callback(error, players, result);
+            });
+        },
+        function(players, startGameResponse, callback) {
+            console.log('Game started!');
+            startGameResponse.players = players;
+            players.forEach(function(p) {
+                UserManager.getUserSocket(p.id).sendCmd(3, startGameResponse); // Match found
+            });
             callback(null);
         }
     ], function(error) {
         if(error)
-            console.log('[matchmaker::findMatch] ' + error);
+            console.log('[matchmaker::findMatch] error = ' + JSON.stringify(error));
     });
     
 }
