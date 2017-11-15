@@ -72,10 +72,10 @@ exports.findMatch = function(user) {
             });
         },
         function(players, startGameResponse, callback) {
-            console.log('Game started!');
+            console.log('Game started: ' + JSON.stringify);
             startGameResponse.players = players;
             players.forEach(function(p) {
-                UserManager.getUserSocket(p.id).sendCmd(3, startGameResponse); // Match found
+                UserManager.getUserSocket(p.id).sendCmd(100, startGameResponse); // Match found
             });
             callback(null);
         }
