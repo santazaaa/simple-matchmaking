@@ -31,5 +31,11 @@ net.createServer(function (socket) {
 
 }).listen(5000);
 
+var http = require('http');
+http.createServer(function(req, res) {
+  console.log(req.url)
+  res.end('Hello Node.js Server!')
+}).listen(8080);
+
 // Put a friendly message on the terminal of the server.
 console.log("Matchmaking Server running at port 5000\n");
