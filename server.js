@@ -42,3 +42,4 @@ http.createServer(function(req, res) {
 console.log("Matchmaking Server running at port 5000\n");
 
 matchmaker.test();
+// matchmaker.start();

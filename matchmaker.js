@@ -6,6 +6,11 @@ var UserManager = require("./UserManager");
 var playersQueue = [];
 var requiredCount = 2;
 var matches = [];
+var models = require('./models');
+var Roster = models.Roster;
+var Team = models.Team;
+var Match = models.Match;
+var Config = models.Config;
 
 var authUser = function(user, callback) {
     if(user.auth) {
@@ -79,7 +84,7 @@ exports.findMatch = function(user) {
             });
         },
         function(players, startGameResponse, callback) {
-            console.log('Game started: ' + JSON.stringify);
+            console.log('Game started: ' + JSON.stringify(startGameResponse));
             startGameResponse.players = players;
             players.forEach(function(p) {
                 UserManager.getUserSocket(p.id).sendCmd(100, startGameResponse); // Match found
@@ -93,72 +98,36 @@ exports.findMatch = function(user) {
     
 }
 
-var Roster = function() {
-
-    this.members = [];
-    
-    this.startQueueTime = Date.now();
-
-    this.size = function() {
-        return this.members.length;
-    }
-
-    this.age = function() {
-        return (Date.now() - this.startQueueTime) / 1000;
-    }
-}
-
-var Team = function() {
-
-    this.rosters = [];
-
-    this.size = 0;
-
-    this.addRoster = function(roster) {
-        this.rosters.push(roster);
-        this.size += roster.size();
-    }
-}
-
-var Match = function() {
-    this.teams = [];
-
-    this.serverAddress = "localhost"
-
-    this.serverPort = 5000;
-
-    this.playersCount = function() {
-        return this.teams.reduce(function(count, team) {
-            return count + team.size;
-        }, 0);
-    };
+exports.start = function() {
+    startMatchmaking();
 }
 
 exports.test = function() {
-    let testConfig = {
-        requiredTeamCount: 3,
-        teamSize: 3
-    };
+    var testConfig = new Config();
+    testConfig.gameMode = 0;
+    testConfig.requiredTeamCount = 3;
+    testConfig.teamSize = 3;
 
-    var totalRosters = 10;
-    var minRosterSize = 1;
-    var maxRosterSize = 3;
-
+    let totalRosters = 10;
+    let minRosterSize = 1;
+    let maxRosterSize = 3;
+    let intervalMS = 2000;
+    
     setInterval(function randomAddRosters() {
         for(var i = 0; i < totalRosters; i++) {
             var roster = new Roster();
             var size = Math.floor(Math.random() * (maxRosterSize - minRosterSize + 1)) + minRosterSize;
             for(var j = 0; j < size; j++) {
                 roster.members.push({
-                    name: "Roster " + i + ", No. " + j
+                    name: "R " + i + ", No. " + j
                 });
             }
             addRosterToQueue(roster);
         }
         console.log('Added rosters to queue: ' + totalRosters + ', total = ' + currentQueue.length);        
-    }, 2000);
+    }, intervalMS);
 
-    processMatchmaking(testConfig);
+    startMatchmaking(testConfig);
 }
 
 var currentQueue = [];
@@ -171,9 +140,11 @@ function addRosterToQueue(roster) {
     // console.log('Added rosters to queue: ' + roster.size() + ', total = ' + currentQueue.length);
 }
 
-function processMatchmaking(config) {
+var process = null;
+
+function startMatchmaking(config) {
     var processCount = 0;
-    setInterval(function() {
+    process = setInterval(function() {
         if(currentQueue.length == 0)
             return;
             
@@ -182,6 +153,10 @@ function processMatchmaking(config) {
         createMatches(currentQueue, config);
         
     }, 10000);
+}
+
+function stopMatchmaking() {
+    clearInterval(process);
 }
 
 function createMatches(queue, config) {
