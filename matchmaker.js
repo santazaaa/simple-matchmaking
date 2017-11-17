@@ -93,48 +93,82 @@ exports.findMatch = function(user) {
     
 }
 
-
-
 var Roster = function() {
-    prototype.members = [];
 
-    prototype.age = 0;
+    this.members = [];
+    
+    this.startQueueTime = Date.now();
 
-    prototype.size = function() {
-        return members.length;
+    this.size = function() {
+        return this.members.length;
     }
+
+    this.age = function() {
+        return (Date.now() - this.startQueueTime) / 1000;
+    }
+}
+
+var Team = function() {
+
+    this.rosters = [];
+
+    this.size = 0;
+
+    this.addRoster = function(roster) {
+        this.rosters.push(roster);
+        this.size += roster.size();
+    }
+}
+
+var Match = function() {
+    this.teams = [];
+
+    this.serverAddress = "localhost"
+
+    this.serverPort = 5000;
+
+    this.playersCount = function() {
+        return this.teams.reduce(function(count, team) {
+            return count + team.size;
+        }, 0);
+    };
 }
 
 exports.test = function() {
     let testConfig = {
-        requiredTeamCount: 2,
-        teamSize: 2
+        requiredTeamCount: 3,
+        teamSize: 3
     };
 
-    var totalRosters = 1000;
-    var minRosterSize = 2;
-    var maxRosterSize = 2;
+    var totalRosters = 10;
+    var minRosterSize = 1;
+    var maxRosterSize = 3;
 
-    for(var i = 0; i < totalRosters; i++) {
-        var roster = [];
-        var size = Math.floor(Math.random() * maxRosterSize) + minRosterSize;
-        for(var j = 0; j < size; j++) {
-            roster.push({
-                name: "Roster " + i + ", No. " + j
-            });
+    setInterval(function randomAddRosters() {
+        for(var i = 0; i < totalRosters; i++) {
+            var roster = new Roster();
+            var size = Math.floor(Math.random() * (maxRosterSize - minRosterSize + 1)) + minRosterSize;
+            for(var j = 0; j < size; j++) {
+                roster.members.push({
+                    name: "Roster " + i + ", No. " + j
+                });
+            }
+            addRosterToQueue(roster);
         }
-        addRosterToQueue(roster);
-    }
+        console.log('Added rosters to queue: ' + totalRosters + ', total = ' + currentQueue.length);        
+    }, 2000);
 
-    createMatches(currentQueue, testConfig);
+    processMatchmaking(testConfig);
 }
 
 var currentQueue = [];
 var currentMatches = [];
 
 function addRosterToQueue(roster) {
+    roster.startQueueTime = Date.now();
     currentQueue.push(roster);
-    console.log('Added roster to queue: ' + JSON.stringify(roster));
+    // console.log('Added roster to queue: ' + JSON.stringify(roster));
+    // console.log('Added rosters to queue: ' + roster.size() + ', total = ' + currentQueue.length);
 }
 
 function processMatchmaking(config) {
@@ -163,7 +197,7 @@ function createMatches(queue, config) {
 
         if(!tryMakeMatch(roster, queue, config)) {
             failed.push(roster);
-            console.log('tryMakeMatch failed: roster = ' + JSON.stringify(roster));
+            // console.log('tryMakeMatch failed: roster = ' + JSON.stringify(roster));
         }
     }
 
@@ -180,24 +214,23 @@ function createMatches(queue, config) {
 }
 
 function tryMakeMatch(target, queue, config) {
-    console.log('[matchmaker::tryMakeMatch] target = ' + JSON.stringify(target));
+    // console.log('[matchmaker::tryMakeMatch] target = ' + JSON.stringify(target));
 
     let potentials = gatherPotentials(target, queue, config);
 
-    let teams = [];
+    let match = new Match();
+    let teams = match.teams;
     let maxPlayers = config.teamSize * config.requiredTeamCount;
 
     // Initialize teams
     for(var i = 0; i < config.requiredTeamCount; i++) {
-        teams.push([]);
+        teams.push(new Team(i));
     }
 
     // Add target roster to 1st team and match
-    let match = [];
-    teams[0].push(target);
-    match.push(target);
+    teams[0].addRoster(target);
 
-    while(countPlayersInMatch(match) < maxPlayers) {
+    while(match.playersCount() < maxPlayers) {
         
         var bestRoster = null;
         var bestTeamScore = -100000;
@@ -212,7 +245,7 @@ function tryMakeMatch(target, queue, config) {
 
                 if(canJoinTeams(roster, teamIndex, teams, config)) {
                     var score = scoreRoster(roster, team, match, config);
-                    if(bestRoster == null || score > bestTeamScore) {
+                    if(bestRoster === null || score > bestTeamScore) {
                         bestRoster = roster;
                         bestTeamScore = score;
                         bestTeamIndex = teamIndex;
@@ -224,13 +257,12 @@ function tryMakeMatch(target, queue, config) {
         }
 
         if(bestRoster == null) {
-            console.log('could not find best roster...');
+            // console.log('could not find best roster...');
             return false;
         }
 
-        console.log('added roster: ' + JSON.stringify(bestRoster) + ', to team: ' + bestTeamIndex);
-        match.push(bestRoster);
-        teams[bestTeamIndex].push(bestRoster);
+        // console.log('added roster: ' + JSON.stringify(bestRoster) + ', to team: ' + bestTeamIndex);
+        teams[bestTeamIndex].addRoster(bestRoster);
         potentials.splice(potentials.indexOf(bestRoster), 1);
         // console.log('match: ' + JSON.stringify(match));
         // console.log('teams: ' + JSON.stringify(teams));
@@ -238,40 +270,18 @@ function tryMakeMatch(target, queue, config) {
     }
     
     // Remove all matched players from queue
-    match.forEach((roster) => {
-        var idx = queue.indexOf(roster);
-        if(idx < 0)
-            return;
-        queue.splice(idx, 1); 
+    match.teams.forEach((team) => {
+        team.rosters.forEach((roster) => {
+            var idx = queue.indexOf(roster);
+            if(idx < 0)
+                return;
+            queue.splice(idx, 1); 
+        });
     });
 
-    createMatch(teams, match);
+    createMatch(match);
 
     return true;
-}
-
-function countPlayersInMatch(match) {
-
-    var count = 0;
-    for(var i = 0; i < match.length; i++) {
-        count += match[i].length;
-    }
-
-    //console.log('[matchmaker::countPlayersInMatch] match = ' + JSON.stringify(match) + ', count = ' + count);
-    
-    return count;
-}
-
-function countPlayersInTeam(team) {
-    
-    var count = 0;
-    for(var i = 0; i < team.length; i++) {
-        count += team[i].length;
-    }
-
-    //console.log('[matchmaker::countPlayersInTeam] team = ' + JSON.stringify(team) + ', count = ' + count);
-    
-    return count;
 }
 
 function gatherPotentials(target, queue, config) {
@@ -282,12 +292,12 @@ function gatherPotentials(target, queue, config) {
         potentials.push(queue[i]);
     }
 
-    console.log('[matchmaker::gatherPotentials] target = ' + JSON.stringify(target) + ', potentials = ' + JSON.stringify(potentials));
+    // console.log('[matchmaker::gatherPotentials] target = ' + JSON.stringify(target) + ', potentials = ' + JSON.stringify(potentials));
     return potentials;
 }
 
 function canJoinTeams(roster, indexToJoin, teams, config) {
-    if(roster.length + countPlayersInTeam(teams[indexToJoin]) > config.teamSize) {
+    if((roster.size() + teams[indexToJoin].size) > config.teamSize) {
         // console.log('[matchmaker::canJoinTeams] false');
         return false;
     }
@@ -299,15 +309,26 @@ function scoreRoster(roster, team, match, config) {
     var score = 0;
 
     // adjust score by time queued
-    score += 1;
+    score += roster.age();
 
     // console.log('[matchmaker::scoreRoster] score = ' + score);
     return score;
 }
 
-function createMatch(teams, match) {
+function createMatch(match) {
     console.log('[matchmaker::createMatch] match = ' + JSON.stringify(match));
     currentMatches.push(match);
+
+    var maxWaitTime = 0;
+    var totalRosters = 0;
+    match.teams.forEach((team) => {
+        team.rosters.forEach((roster) => {
+            //console.log('Roster age: ' + roster.age());
+            maxWaitTime = Math.max(maxWaitTime, roster.age());
+            totalRosters++;
+        })
+    });
+    console.log('Match created: maxWaitTime = ' + maxWaitTime, ', total rosters = ' + totalRosters);
 }
 
 exports.cancel = function(client) {
