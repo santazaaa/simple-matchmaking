@@ -108,11 +108,11 @@ var Roster = function() {
 exports.test = function() {
     let testConfig = {
         requiredTeamCount: 2,
-        teamSize: 1
+        teamSize: 2
     };
 
-    var totalRosters = 3;
-    var minRosterSize = 1;
+    var totalRosters = 1000;
+    var minRosterSize = 2;
     var maxRosterSize = 2;
 
     for(var i = 0; i < totalRosters; i++) {
@@ -126,10 +126,11 @@ exports.test = function() {
         addRosterToQueue(roster);
     }
 
-    processMatchmaking(testConfig);
+    createMatches(currentQueue, testConfig);
 }
 
 var currentQueue = [];
+var currentMatches = [];
 
 function addRosterToQueue(roster) {
     currentQueue.push(roster);
@@ -143,14 +144,16 @@ function processMatchmaking(config) {
             return;
             
         processCount++;
-        console.log('####################### START ' + processCount);
+        
         createMatches(currentQueue, config);
-        console.log('####################### END ' + processCount);
+        
     }, 10000);
 }
 
 function createMatches(queue, config) {
-    console.log('[matchmaker::createMatches] ' + JSON.stringify(queue));
+    console.log('[matchmaker::createMatches] total rosters = ' + queue.length);
+    console.log('####################### START #######################');
+    console.time('createMatches');
 
     let rosters = queue;
     let failed = [];
@@ -165,8 +168,15 @@ function createMatches(queue, config) {
     }
 
     Array.prototype.push.apply(queue, failed);
-    console.log('failed rosters: ' + JSON.stringify(failed));
-    console.log('remainging rosters: ' + JSON.stringify(queue));
+
+    // console.log('failed rosters: ' + JSON.stringify(failed, null, 2));
+    // console.log('remainging rosters: ' + JSON.stringify(queue, null, 2));
+    // console.log('current matches: ' + JSON.stringify(currentMatches, null, 2));
+    console.log('failed rosters count: ' + failed.length);
+    console.log('remaining rosters in queue: ' + queue.length);
+    console.log('current matched: ' + currentMatches.length);
+    console.log('####################### END #######################');
+    console.timeEnd('createMatches');
 }
 
 function tryMakeMatch(target, queue, config) {
@@ -297,6 +307,7 @@ function scoreRoster(roster, team, match, config) {
 
 function createMatch(teams, match) {
     console.log('[matchmaker::createMatch] match = ' + JSON.stringify(match));
+    currentMatches.push(match);
 }
 
 exports.cancel = function(client) {
