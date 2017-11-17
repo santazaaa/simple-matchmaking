@@ -1,5 +1,7 @@
 var User = function(id) {
-    this.id = id;
+    this.playFabId = id;
+    this.sessionTicket = null;
+    this.online = true;
 };
 
 module.exports = User;

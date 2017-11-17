@@ -6,10 +6,7 @@ var uuidv1 = require('uuid/v1');
 var PlayFabMatchmaker = require("playfab-sdk/Scripts/PlayFab/PlayFabMatchmaker");
 
 var UserManager = require("./UserManager");
-
-var playersQueue = [];
-var requiredCount = 2;
-var matches = [];
+var messageHandler = require('./messageHandler');
 
 var models = require('./models');
 var User = require('./user');
@@ -18,101 +15,23 @@ var Team = models.Team;
 var Match = models.Match;
 var Config = models.Config;
 
-function authUser(user, callback) {
-    if(user.auth) {
-        console.log('Player already authenticated');
-        callback(null, true);
-        return;
-    }
+var currentQueue = [];
+var currentMatches = [];
+var process = null;
 
-    console.log("auth player: " + user.playFabId);
-
-    PlayFabMatchmaker.AuthUser({
-        AuthorizationTicket: user.sessionTicket
-    }, function(error, result) {
-        if(error != null) {
-            console.log('PlayFabMatchmaker.AuthUser error: ' + error);
-            callback(error, false);
-            return;
-        }
-
-        user.auth = true;
-        console.log('auth: true');
-        callback(null, true);
-    });
-}
-
-exports.findMatch = function(user) {
-
-    async.waterfall([
-        function(next) {
-            authUser(user, next);
-        },
-        function(auth, callback) {
-
-            if(playersQueue.indexOf(user) != -1) {
-                callback(user.name + 'is already in queue!');
-                return;
-            }
-
-            playersQueue.push(user);
-            
-            console.log(user.playFabId + ': finding a match... player in queue = ' + playersQueue.length);
-            
-            if(playersQueue.length < requiredCount) {
-                console.log('Waiting for other players..');
-                callback('Waiting for players');
-                return;
-            }
-
-            var matchedPlayers = [];
-            while(playersQueue.length >= requiredCount) {
-                
-                for(var i = 0; i < requiredCount; i++) {
-                    matchedPlayers.push(playersQueue.shift());
-                }
-        
-                console.log('Matched! ' + matchedPlayers[0].playFabId + ' and ' + matchedPlayers[1].playFabId);
-                break;
-            }
-
-            callback(null, matchedPlayers);
-        },
-        function(players, callback) {
-            console.log('Starting game...');
-            PlayFabMatchmaker.StartGame({
-                Build: "1.1",
-                ExternalMatchmakerEventEndpoint: "localhost/test",
-                GameMode: "Normal",
-                Region: "Singapore"
-            }, function(error, result) {
-                callback(error, players, result);
-            });
-        },
-        function(players, startGameResponse, callback) {
-            console.log('Game started: ' + JSON.stringify(startGameResponse));
-            startGameResponse.players = players;
-            players.forEach(function(p) {
-                UserManager.getUserSocket(p.id).sendCmd(100, startGameResponse); // Match found
-            });
-            callback(null);
-        }
-    ], function(error) {
-        if(error)
-            console.log('[matchmaker::findMatch] error = ' + JSON.stringify(error));
-    });
-    
-}
+var testConfig = new Config();
+testConfig.gameMode = 0;
+testConfig.requiredTeamCount = 3;
+testConfig.teamSize = 3;
 
 exports.start = function() {
-    startMatchmaking();
+    startMatchmaking(testConfig);
 }
 
-exports.newFindMatch = function(msgPayload) {
+exports.findMatch = function(rosterInfo) {
     async.waterfall(
         [
             function parseToRoster(callback) {
-                var rosterInfo = JSON.parse(msgPayload);
                 if(rosterInfo == null) {
                     callback('rosterInfo is null!');
                     return;
@@ -149,10 +68,7 @@ exports.newFindMatch = function(msgPayload) {
 }
 
 exports.test = function() {
-    var testConfig = new Config();
-    testConfig.gameMode = 0;
-    testConfig.requiredTeamCount = 3;
-    testConfig.teamSize = 3;
+    
 
     let totalRosters = 10;
     let minRosterSize = 1;
@@ -181,7 +97,7 @@ exports.test = function() {
                 gameMode: 0,
                 userIds: userIds,
             }
-            exports.newFindMatch(JSON.stringify(payload));
+            exports.findMatch(JSON.stringify(payload));
         }
         iteration++;
         console.log('Added rosters to queue: ' + totalRosters + ', total = ' + currentQueue.length);        
@@ -190,17 +106,12 @@ exports.test = function() {
     startMatchmaking(testConfig);
 }
 
-var currentQueue = [];
-var currentMatches = [];
-
 function addRosterToQueue(roster) {
     roster.startQueueTime = Date.now();
     currentQueue.push(roster);
     // console.log('Added roster to queue: ' + JSON.stringify(roster));
     // console.log('Added rosters to queue: ' + roster.size() + ', total = ' + currentQueue.length);
 }
-
-var process = null;
 
 function startMatchmaking(config) {
     var processCount = 0;
@@ -377,7 +288,7 @@ function createMatch(match) {
                 user.matchId = match.id;
                 user.matchTicket = uuidv1();
 
-                console.log('Assign matchId and ticket to user id = ' + user.id + ', ticket = ' + user.matchTicket);
+                console.log('Assign matchId and ticket to user id = ' + user.playFabId + ', ticket = ' + user.matchTicket);
             });
         });
     });
@@ -445,18 +356,13 @@ function sendMatchInfo(match, serverInfo) {
     console.log('[sendMatchInfo] sending match info = ' + JSON.stringify(matchInfo));
 
     match.forEachMember((user) => {
-        //user.sendCmd(100, matchInfo); // Match found
+        messageHandler.sendMessage(UserManager.getUserSocket(user.playFabId), 100, matchInfo);
     });
 }
 
 exports.cancel = function(client) {
 
-    while(true) {
-        var playerIdx = playersQueue.indexOf(client);
-        if(playerIdx == -1)
-            break;
-        playersQueue.splice(playerIdx, 1);
-    }
+    // Not implemented
     
     console.log(client.name + ': cancel finding a match...');
 }

@@ -1,10 +1,6 @@
 var matchmaker = require('./matchmaker');
 var UserManager = require('./UserManager');
 
-var OpCode = function() {
-    this.Test = 0;
-};
-
 exports.onConnected = function(client) {
     client.sendCmd = function(opCode, data) {
         var json = JSON.stringify({
@@ -18,11 +14,10 @@ exports.onConnected = function(client) {
     // Identify this client
     client.name = client.remoteAddress + ":" + client.remotePort;
 
-    // Add to user list
-    UserManager.addUser(client.name, client);
-
     // Send a nice welcome message and announce
-    client.write(client.name + " is connected" + "\r\n");
+    exports.sendMessage(client, 99, { message: 'connected' });
+
+    console.log(client.name + " is connected" + "\r\n");
 }
 
 exports.parseRawData = function(data, client) {
@@ -33,15 +28,11 @@ exports.parseRawData = function(data, client) {
         console.log('opCode: ' + json.opCode);
         switch(json.opCode) {
             case 0: // Set Playfab ID
-                setPlayFabIdToUser(payload, client);
+                handleAuthenticateUser(payload, client);
             break;
 
             case 1: // Find normal match
-                findNormalMatch(payload, client);
-            break;
-
-            case 2: // New Find match (Add roster to queue)
-                newFindMatch(payload, client);
+                handleFindMatch(payload, client);
             break;
         }
     } catch (e){
@@ -50,24 +41,39 @@ exports.parseRawData = function(data, client) {
     }
 }
 
-var setPlayFabIdToUser = function(payload, client) {
-    var user = UserManager.getUser(client.name);
-    user.playFabId = payload.playFabId;
-    user.sessionTicket = payload.sessionTicket;
-    console.log('Set PlayFab id to user: ' + JSON.stringify(user));
+exports.sendMessage = function(client, opCode, payload) {
+    if(client == null) {
+        console.error('[messageHandler::sendMessage] client is null, ignore sending message...');
+        return;
+    }
+
+    var json = JSON.stringify({
+        opCode: opCode,
+        payload: payload
+    });
+    
+    client.write(json + '\r\n');
+
+    console.log('[messageHandler::sendMessage] sending ' + json + ', to: ' + client.name);
 }
 
-var findNormalMatch = function(payload, client) {
-    matchmaker.newFindMatch(payload);
+function handleAuthenticateUser(payload, client) {
+    UserManager.authenticate(
+        client, 
+        payload.sessionTicket, 
+        payload.playFabId, 
+        (success) => {
+            exports.sendMessage(client, 0, { authenticated: success });
+        }
+    );
 }
 
-var newFindNormalMatch = function(payload, client) {
-    var client = UserManager.getUser(client.name);
-    matchmaker.newFindMatch(client);
+function handleFindMatch(payload, client) {
+    matchmaker.findMatch(payload);
 }
 
 exports.onDisconnected = function(client) {
     console.log('[messageHandler::onDisconnected] ' + client.name);
     matchmaker.cancel(client);
-    UserManager.removeUser(client.name);
+    UserManager.onDisconnected(client);
 }
