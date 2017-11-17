@@ -40,9 +40,22 @@ exports.Match = function() {
 
     this.serverPort = 5000;
 
+    this.id = null;
+
     this.playersCount = function() {
         return this.teams.reduce(function(count, team) {
             return count + team.size;
         }, 0);
     };
+
+    this.forEachMember = function(func) {
+        this.teams.forEach((team) => {
+            team.rosters.forEach((roster) => {
+                roster.members.forEach((user) => {
+                    func(user);
+                });
+            });
+        });
+    }
+
 }

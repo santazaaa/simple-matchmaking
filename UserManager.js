@@ -16,7 +16,7 @@ exports.removeUser = function(id) {
 }
 
 exports.getUser = function(id) {
-    console.log('[UserManager::getUser] ' + id);
+    // console.log('[UserManager::getUser] ' + id);
     return userMap[id];
 }
 

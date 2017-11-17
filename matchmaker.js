@@ -1,12 +1,18 @@
 'use strict';
 
 var async = require('async');
+var uuidv1 = require('uuid/v1');
+
 var PlayFabMatchmaker = require("playfab-sdk/Scripts/PlayFab/PlayFabMatchmaker");
+
 var UserManager = require("./UserManager");
+
 var playersQueue = [];
 var requiredCount = 2;
 var matches = [];
+
 var models = require('./models');
+var User = require('./user');
 var Roster = models.Roster;
 var Team = models.Team;
 var Match = models.Match;
@@ -117,12 +123,12 @@ exports.newFindMatch = function(msgPayload) {
                 var roster = new Roster();
                 roster.gameMode = rosterInfo.gameMode;
                 rosterInfo.userIds.forEach((id) => {
-                    // var user = UserManager.getUser(id);
-                    // if(user == null) {
-                    //     callback('user is null!');
-                    //     return;
-                    // }
-                    roster.members.push(id); // Just use id = user for now
+                    var user = UserManager.getUser(id);
+                    if(user == null) {
+                        callback('user is null!');
+                        return;
+                    }
+                    roster.members.push(user);
                 });
                 callback(null, roster);
             },
@@ -153,16 +159,18 @@ exports.test = function() {
     let maxRosterSize = 3;
     let intervalMS = 2000;
     
+    let UserManager = require('./UserManager');
+    let iteration = 0;
+
     setInterval(function randomAddRosters() {
         for(var i = 0; i < totalRosters; i++) {
             var roster = new Roster();
             var size = Math.floor(Math.random() * (maxRosterSize - minRosterSize + 1)) + minRosterSize;
             var userIds = [];
             for(var j = 0; j < size; j++) {
-                let id = "R " + i + ", No. " + j;
-                roster.members.push({
-                    userId: id
-                });
+                let id = "I" + iteration + "R" + i + "N" + j;
+                UserManager.addUser(id, null);
+                roster.members.push(UserManager.getUser(id));
                 userIds.push(id);
             }
 
@@ -175,6 +183,7 @@ exports.test = function() {
             }
             exports.newFindMatch(JSON.stringify(payload));
         }
+        iteration++;
         console.log('Added rosters to queue: ' + totalRosters + ', total = ' + currentQueue.length);        
     }, intervalMS);
 
@@ -245,6 +254,8 @@ function tryMakeMatch(target, queue, config) {
     let potentials = gatherPotentials(target, queue, config);
 
     let match = new Match();
+    match.gameMode = config.gameMode;
+
     let teams = match.teams;
     let maxPlayers = config.teamSize * config.requiredTeamCount;
 
@@ -307,6 +318,8 @@ function tryMakeMatch(target, queue, config) {
 
     createMatch(match);
 
+    startMatch(match);
+
     return true;
 }
 
@@ -343,18 +356,97 @@ function scoreRoster(roster, team, match, config) {
 
 function createMatch(match) {
     console.log('[matchmaker::createMatch] match = ' + JSON.stringify(match));
+
+    // Generate a match id
+    match.id = uuidv1();
+
     currentMatches.push(match);
 
-    var maxWaitTime = 0;
-    var totalRosters = 0;
+    let maxWaitTime = 0;
+    let totalRosters = 0;
+
     match.teams.forEach((team) => {
         team.rosters.forEach((roster) => {
             //console.log('Roster age: ' + roster.age());
             maxWaitTime = Math.max(maxWaitTime, roster.age());
             totalRosters++;
-        })
+
+            roster.members.forEach((user) => {
+
+                // Assign matchId and matchTicket to all players in the match
+                user.matchId = match.id;
+                user.matchTicket = uuidv1();
+
+                console.log('Assign matchId and ticket to user id = ' + user.id + ', ticket = ' + user.matchTicket);
+            });
+        });
     });
-    console.log('Match created: maxWaitTime = ' + maxWaitTime, ', total rosters = ' + totalRosters);
+    console.log('Match created: id = ' + match.id + ', maxWaitTime = ' + maxWaitTime, ', total rosters = ' + totalRosters);
+}
+
+function startMatch(match) {
+    async.waterfall([
+        function(callback) {
+            requestGameServer(match, callback);
+        },
+        function(serverInfo, callback) {
+            sendMatchInfo(match, serverInfo);
+            callback(null);
+        }
+    ], function(error) {
+        if(error) {
+            console.error('[startMatch] ' + JSON.stringify(error));
+        }
+    });
+}
+
+function requestGameServer(match, callback) {
+    console.log('[requestGameServer] matchId = ' + match.id + ', gameMode = ' + match.gameMode);
+
+    // For testing purpose
+    callback(null, {
+        "code": 200,
+        "status": "OK",
+        "data": {
+          "LobbyID": "4006214",
+          "ServerHostname": "192.168.0.1",
+          "ServerIPV6Address": "2600:1f18:70d:5100:8949:a309:976a:e6fa",
+          "ServerPort": 9000,
+          "Ticket": "e98yf289f248902f4904f0924f9pj",
+          "Status": "Waiting"
+        }
+    });
+    return;
+
+    PlayFabMatchmaker.StartGame({
+        Build: "1.1", // FIXME
+        ExternalMatchmakerEventEndpoint: "localhost/test", // FIXME
+        GameMode: match.gameMode,
+        Region: "Singapore"
+    }, function(error, result) {
+
+        if(error) {
+            console.error('[requestGameServer] ' + JSON.stringify(error));
+            callback(error);
+            return;
+        }
+        
+        callback(null, result);
+    });
+}
+
+function sendMatchInfo(match, serverInfo) {
+    let matchInfo = {
+        matchId: match.id,
+        matchTicket: match.ticket,
+        serverInfo: serverInfo
+    }
+    
+    console.log('[sendMatchInfo] sending match info = ' + JSON.stringify(matchInfo));
+
+    match.forEachMember((user) => {
+        //user.sendCmd(100, matchInfo); // Match found
+    });
 }
 
 exports.cancel = function(client) {
