@@ -13,6 +13,7 @@ console.log("PlayFab settings: " + JSON.stringify(PlayFab.settings));
 // Load the TCP Library
 var net = require('net');
 var messageHandler = require('./messageHandler');
+var matchmaker = require('./matchmaker');
 
 // Start a TCP Server
 net.createServer(function (socket) {
@@ -39,3 +40,5 @@ http.createServer(function(req, res) {
 
 // Put a friendly message on the terminal of the server.
 console.log("Matchmaking Server running at port 5000\n");
+
+matchmaker.test();
