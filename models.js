@@ -6,6 +6,8 @@ exports.Config = function() {
 
 exports.Roster = function() {
 
+    this.gameMode = 0;
+
     this.members = [];
     
     this.startQueueTime = Date.now();

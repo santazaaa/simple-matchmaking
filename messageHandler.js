@@ -39,6 +39,10 @@ exports.parseRawData = function(data, client) {
             case 1: // Find normal match
                 findNormalMatch(payload, client);
             break;
+
+            case 2: // New Find match (Add roster to queue)
+                newFindMatch(payload, client);
+            break;
         }
     } catch (e){
         console.error('[messageHandler::parseRawData] Failed to parse data = ' + data);
@@ -54,8 +58,12 @@ var setPlayFabIdToUser = function(payload, client) {
 }
 
 var findNormalMatch = function(payload, client) {
+    matchmaker.newFindMatch(payload);
+}
+
+var newFindNormalMatch = function(payload, client) {
     var client = UserManager.getUser(client.name);
-    matchmaker.findMatch(client);
+    matchmaker.newFindMatch(client);
 }
 
 exports.onDisconnected = function(client) {

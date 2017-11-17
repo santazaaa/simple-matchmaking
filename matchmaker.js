@@ -12,7 +12,7 @@ var Team = models.Team;
 var Match = models.Match;
 var Config = models.Config;
 
-var authUser = function(user, callback) {
+function authUser(user, callback) {
     if(user.auth) {
         console.log('Player already authenticated');
         callback(null, true);
@@ -102,6 +102,46 @@ exports.start = function() {
     startMatchmaking();
 }
 
+exports.newFindMatch = function(msgPayload) {
+    async.waterfall(
+        [
+            function parseToRoster(callback) {
+                var rosterInfo = JSON.parse(msgPayload);
+                if(rosterInfo == null) {
+                    callback('rosterInfo is null!');
+                    return;
+                }
+                callback(null, rosterInfo);
+            },
+            function createRoster(rosterInfo, callback) {
+                var roster = new Roster();
+                roster.gameMode = rosterInfo.gameMode;
+                rosterInfo.userIds.forEach((id) => {
+                    // var user = UserManager.getUser(id);
+                    // if(user == null) {
+                    //     callback('user is null!');
+                    //     return;
+                    // }
+                    roster.members.push(id); // Just use id = user for now
+                });
+                callback(null, roster);
+            },
+            function addToQueue(roster, callback) {
+                addRosterToQueue(roster);
+                callback(null, roster);
+            }
+        ]
+    , function(error, result) {
+        if(error) {
+            console.error('[matchmaker::newFindMatch] error = ' + error);
+            return;
+        }
+
+        console.log('[matchmaker::newFindMatch] result = ' + JSON.stringify(result));
+    });
+    
+}
+
 exports.test = function() {
     var testConfig = new Config();
     testConfig.gameMode = 0;
@@ -117,12 +157,23 @@ exports.test = function() {
         for(var i = 0; i < totalRosters; i++) {
             var roster = new Roster();
             var size = Math.floor(Math.random() * (maxRosterSize - minRosterSize + 1)) + minRosterSize;
+            var userIds = [];
             for(var j = 0; j < size; j++) {
+                let id = "R " + i + ", No. " + j;
                 roster.members.push({
-                    name: "R " + i + ", No. " + j
+                    userId: id
                 });
+                userIds.push(id);
             }
-            addRosterToQueue(roster);
+
+            //addRosterToQueue(roster);
+
+            // Fake payload from client
+            var payload = {
+                gameMode: 0,
+                userIds: userIds,
+            }
+            exports.newFindMatch(JSON.stringify(payload));
         }
         console.log('Added rosters to queue: ' + totalRosters + ', total = ' + currentQueue.length);        
     }, intervalMS);
