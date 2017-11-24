@@ -2,6 +2,7 @@
 
 var async = require('async');
 var uuidv1 = require('uuid/v1');
+var request = require('request');
 
 var PlayFabMatchmaker = require("playfab-sdk/Scripts/PlayFab/PlayFabMatchmaker");
 
@@ -21,8 +22,8 @@ var process = null;
 
 var testConfig = new Config();
 testConfig.gameMode = 0;
-testConfig.requiredTeamCount = 3;
-testConfig.teamSize = 3;
+testConfig.requiredTeamCount = 1;
+testConfig.teamSize = 1;
 
 exports.start = function() {
     startMatchmaking(testConfig);
@@ -314,21 +315,33 @@ function startMatch(match) {
 function requestGameServer(match, callback) {
     console.log('[requestGameServer] matchId = ' + match.id + ', gameMode = ' + match.gameMode);
 
-    // For testing purpose
-    callback(null, {
-        "code": 200,
-        "status": "OK",
-        "data": {
-          "LobbyID": "4006214",
-          "ServerHostname": "192.168.0.1",
-          "ServerIPV6Address": "2600:1f18:70d:5100:8949:a309:976a:e6fa",
-          "ServerPort": 9000,
-          "Ticket": "e98yf289f248902f4904f0924f9pj",
-          "Status": "Waiting"
+    // // For testing purpose
+    // callback(null, {
+    //     "code": 200,
+    //     "status": "OK",
+    //     "data": {
+    //       "LobbyID": "4006214",
+    //       "ServerHostname": "192.168.0.1",
+    //       "ServerIPV6Address": "2600:1f18:70d:5100:8949:a309:976a:e6fa",
+    //       "ServerPort": 9000,
+    //       "Ticket": "e98yf289f248902f4904f0924f9pj",
+    //       "Status": "Waiting"
+    //     }
+    // });
+    // return;
+
+    // This uses my own game server manager
+    request.get("http://localhost:9000/app/startgame", function(error, response, body) {
+        if(error || response.statusCode != 200) {
+            callback(error);
+            return;
         }
+        console.log('Game instance info: ' + body);
+        let result = JSON.parse(body);
+        callback(null, result.data);
     });
     return;
-
+    
     PlayFabMatchmaker.StartGame({
         Build: "1.1", // FIXME
         ExternalMatchmakerEventEndpoint: "localhost/test", // FIXME
